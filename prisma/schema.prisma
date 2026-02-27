@@ -1,0 +1,132 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// Table 1: restaurants
+model Restaurant {
+  id        String   @id @default(uuid())
+  name      String
+  country   String   @db.VarChar(5)
+  currency  String   @db.VarChar(3)
+  createdAt DateTime @default(now())
+
+  // Relations
+  users         User[]
+  uploads       Upload[]
+  analyses      Analysis[]
+  financialData FinancialData[]
+}
+
+// Table 2: users
+model User {
+  id        String   @id @default(uuid())
+  email     String   @unique
+  password  String
+  createdAt DateTime @default(now())
+
+  // Trial & Subscription
+  trialEndsAt DateTime?
+  subscribed  Boolean   @default(false)
+
+  // Relations
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+}
+
+// Table 3: uploads
+model Upload {
+  id          String   @id @default(uuid())
+  fileName    String
+  fileType    String   @db.VarChar(20)
+  periodStart DateTime @db.Date
+  periodEnd   DateTime @db.Date
+  uploadedAt  DateTime @default(now())
+
+  // Relations
+  restaurantId  String
+  restaurant    Restaurant    @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+  analyses      Analysis[]
+  financialData FinancialData[]
+}
+
+// Table 4: analyses
+model Analysis {
+  id        String   @id @default(uuid())
+  createdAt DateTime @default(now())
+
+  // Health Score
+  healthScore Int
+
+  // Labor metrics
+  laborPct    Decimal? @db.Decimal(8, 2)
+  laborTarget String?  @db.VarChar(20)
+
+  // Prime Cost metrics
+  primeCostPct    Decimal? @db.Decimal(8, 2)
+  primeCostTarget String?  @db.VarChar(20)
+
+  // Worst day metrics
+  worstDay        String?  @db.VarChar(20)
+  worstDayRevenue Decimal? @db.Decimal(10, 2)
+  worstDayLabor   Decimal? @db.Decimal(10, 2)
+  worstDayLoss    Decimal? @db.Decimal(10, 2)
+
+  // Insights
+  insight  String? @db.Text
+  action   String? @db.Text
+  savings  String? @db.Text
+  severity String? @db.VarChar(20)
+
+  // Totals
+  totalRevenue Decimal? @db.Decimal(12, 2)
+  totalLabor   Decimal? @db.Decimal(12, 2)
+
+  // Best day
+  bestDay        String?  @db.VarChar(20)
+  bestDayRevenue Decimal? @db.Decimal(10, 2)
+
+  // PDF URL
+  pdfUrl String? @db.Text
+
+  // Food cost metadata
+  foodCostEstimated Boolean @default(false)
+
+  // Data coverage (for mismatch detection UI)
+  salesDays       Int?
+  laborDays       Int?
+  salesDateRange  String? @db.VarChar(60)
+  laborDateRange  String? @db.VarChar(60)
+
+  // Relations
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  uploadId String
+  upload   Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+}
+
+// Table 5: financial_data
+model FinancialData {
+  id        String   @id @default(uuid())
+  date      DateTime @db.Date
+  revenue   Decimal  @db.Decimal(12, 2)
+  laborCost Decimal  @db.Decimal(12, 2)
+
+  // Optional fields
+  laborHours      Decimal? @db.Decimal(8, 2)
+  expenseAmount   Decimal? @db.Decimal(12, 2)
+  expenseCategory String?  @db.Text
+
+  createdAt DateTime @default(now())
+
+  // Relations
+  restaurantId String
+  restaurant   Restaurant @relation(fields: [restaurantId], references: [id], onDelete: Cascade)
+
+  uploadId String
+  upload   Upload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+}

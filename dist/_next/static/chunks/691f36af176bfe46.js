@@ -1,0 +1,1 @@
+(globalThis.TURBOPACK||(globalThis.TURBOPACK=[])).push(["object"==typeof document?document.currentScript:void 0,36890,t=>{"use strict";let e=(0,t.i(11711).default)("check",[["path",{d:"M20 6 9 17l-5-5",key:"1gmf2c"}]]);t.s(["default",()=>e])}]);

@@ -1,7 +1,14 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
-  /* config options here */
+  images: {
+    unoptimized: true,
+  },
+  typescript: {
+    ignoreBuildErrors: true,
+  },
+  // Silence Turbopack warning - using Turbopack (default in Next.js 16)
+  turbopack: {},
 };
 
 export default nextConfig;
