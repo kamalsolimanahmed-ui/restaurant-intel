@@ -1,15 +1,18 @@
 "use client";
 
-import { signOut, useSession } from "next-auth/react";
-import { useSearchParams } from "next/navigation";
-import { useEffect, Suspense } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
+import { getSession, signOut } from "@/lib/auth";
+import { useEffect, Suspense, useState } from "react";
 
 function UpgradeContent() {
-  const { data: session } = useSession();
+  const router = useRouter();
+  const [session, setSession] = useState<any>(null);
   const searchParams = useSearchParams();
   const reason = searchParams.get('reason');
 
   useEffect(() => {
+    getSession().then((sess) => setSession(sess));
+
     // Log trial expiration for analytics
     if (reason === 'trial_expired' && session?.user?.email) {
       console.log(`Trial expired for user: ${session.user.email}`);
@@ -23,11 +26,11 @@ function UpgradeContent() {
         {reason === 'trial_expired' ? (
           <>
             <h1 className="text-3xl font-bold text-gray-900 mb-3">
-                    Your Free Trial Has Ended
-                </h1>
+              Your Free Trial Has Ended
+            </h1>
             <p className="text-gray-500 mb-8 text-lg">
               Upgrade to Pro for <strong>$15/month</strong> to continue using Restaurant Intel.
-                </p>
+            </p>
           </>
         ) : (
           <>
@@ -36,7 +39,7 @@ function UpgradeContent() {
             </h1>
             <p className="text-gray-500 mb-8 text-lg">
               Get unlimited access to all features for just <strong>$15/month</strong>.
-                    </p>
+            </p>
           </>
         )}
 
@@ -86,7 +89,10 @@ function UpgradeContent() {
           </a>
 
           <button
-            onClick={() => signOut({ callbackUrl: "/auth/login" })}
+            onClick={async () => {
+              await signOut();
+              router.push("/auth/login");
+            }}
             className="w-full text-gray-500 hover:text-gray-700 font-medium py-3 transition-colors"
           >
             Sign out instead
@@ -100,10 +106,10 @@ function UpgradeContent() {
           <p className="text-xs text-gray-400 mt-2">
             By upgrading, you agree to our <a href="/terms" className="underline">Terms</a> and <a href="/privacy" className="underline">Privacy Policy</a>
           </p>
-                </div>
+        </div>
       </div>
     </div>
-    );
+  );
 }
 
 export default function UpgradePage() {

@@ -2,9 +2,9 @@
 
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
-import { useSession, signOut } from "next-auth/react";
 import { format, differenceInDays, parseISO } from "date-fns";
 import { LogOut, Check, FileText, Download, Loader2, X, FileDown } from "lucide-react";
+import { getSession, signOut } from "@/lib/auth";
 
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -283,7 +283,8 @@ function StepIndicator({ step, label, active, done }: { step: number; label: str
 // Main Dashboard Page
 export default function DashboardPage() {
   const router = useRouter();
-  const { data: session, status } = useSession();
+  const [session, setSession] = useState<any>(null);
+  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [isDragging, setIsDragging] = useState(false);
   const [files, setFiles] = useState<FileUploads>({ sales: null, labor: null, expenses: null });
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -296,11 +297,18 @@ export default function DashboardPage() {
   const [trialDaysLeft, setTrialDaysLeft] = useState(0);
 
   useEffect(() => {
-    if (status === "authenticated") {
-      fetchAnalyses();
-      calculateTrialDays();
-    }
-  }, [status]);
+    getSession().then((sess) => {
+      if (sess) {
+        setSession(sess);
+        setStatus("authenticated");
+        fetchAnalyses();
+        calculateTrialDays(sess);
+      } else {
+        setStatus("unauthenticated");
+        router.push("/auth/login");
+      }
+    });
+  }, []);
 
   const fetchAnalyses = async () => {
     try {
@@ -320,9 +328,9 @@ export default function DashboardPage() {
     }
   };
 
-  const calculateTrialDays = () => {
-    if (session?.user?.trialEndsAt) {
-      const trialEnd = parseISO(session.user.trialEndsAt);
+  const calculateTrialDays = (currentSession: any) => {
+    if (currentSession?.user?.trialEndsAt) {
+      const trialEnd = parseISO(currentSession.user.trialEndsAt);
       const daysLeft = differenceInDays(trialEnd, new Date());
       setTrialDaysLeft(Math.max(0, daysLeft));
     }
@@ -518,7 +526,8 @@ export default function DashboardPage() {
   };
 
   const handleLogout = async () => {
-    await signOut({ callbackUrl: "/auth/login" });
+    await signOut();
+    router.push("/auth/login");
   };
 
   const exportLinks = [

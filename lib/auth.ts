@@ -109,3 +109,7 @@ export async function auth() {
     return null; // invalid/expired token
   }
 }
+
+export async function getSession() {
+  return await auth();
+}

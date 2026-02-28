@@ -2,8 +2,8 @@
 
 import { useState, useEffect, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { signOut, useSession } from "next-auth/react";
 import { LogOut, Upload, Share, Mail, Check, Loader2 } from "lucide-react";
+import { getSession, signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 
@@ -71,7 +71,8 @@ function formatPct(value: number | null): string {
 function ResultsContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
-  const { data: session, status } = useSession();
+  const [session, setSession] = useState<any>(null);
+  const [status, setStatus] = useState<"loading" | "authenticated" | "unauthenticated">("loading");
   const [toastMessage, setToastMessage] = useState("");
   const [showToast, setShowToast] = useState(false);
   const [reminderSent, setReminderSent] = useState(false);
@@ -83,12 +84,21 @@ function ResultsContent() {
   const analysisId = searchParams.get("analysisId");
 
   useEffect(() => {
-    if (status === "authenticated" && analysisId) {
-      fetchAnalysis();
-    } else if (status === "authenticated" && !analysisId) {
-      router.push("/dashboard");
-    }
-  }, [status, analysisId]);
+    getSession().then((sess) => {
+      if (sess) {
+        setSession(sess);
+        setStatus("authenticated");
+        if (analysisId) {
+          fetchAnalysis();
+        } else {
+          router.push("/dashboard");
+        }
+      } else {
+        setStatus("unauthenticated");
+        router.push("/auth/login");
+      }
+    });
+  }, [analysisId]);
 
   const fetchAnalysis = async () => {
     try {
@@ -135,7 +145,8 @@ function ResultsContent() {
   };
 
   const handleLogout = async () => {
-    await signOut({ callbackUrl: "/auth/login" });
+    await signOut();
+    router.push("/auth/login");
   };
 
   if (status === "loading" || isLoading) {
