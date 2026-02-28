@@ -6,8 +6,7 @@ import { prisma } from "@/lib/prisma";
 
 
 const authConfig = {
-  secret: process.env.NEXTAUTH_SECRET || "fallback-secret-key-for-development-only",
-  trustHost: process.env.AUTH_TRUST_HOST === "true",
+  secret: process.env.NEXTAUTH_SECRET || process.env.AUTH_SECRET,
   providers: [
     CredentialsProvider({
       name: "credentials",
@@ -19,10 +18,12 @@ const authConfig = {
         const email = credentials?.email as string | undefined;
         const password = credentials?.password as string | undefined;
 
+        console.log("🔍 [authorize] called with email:", email);
+
         if (!email || !password) {
+          console.log("🔍 [authorize] missing email or password");
           return null;
         }
-
 
         try {
           const user = await prisma.user.findUnique({
@@ -30,17 +31,20 @@ const authConfig = {
             include: { restaurant: true },
           });
 
+          console.log("🔍 [authorize] user found:", user ? `id=${user.id}` : "NOT FOUND");
+
           if (!user) {
             return null;
           }
 
           const isPasswordValid = await bcrypt.compare(password, user.password);
+          console.log("🔍 [authorize] password valid:", isPasswordValid);
 
           if (!isPasswordValid) {
             return null;
           }
 
-          return {
+          const result = {
             id: user.id,
             email: user.email,
             restaurantId: user.restaurantId,
@@ -48,8 +52,10 @@ const authConfig = {
             subscribed: user.subscribed,
             trialEndsAt: user.trialEndsAt?.toISOString() || null,
           };
+          console.log("🔍 [authorize] returning user object:", JSON.stringify(result));
+          return result;
         } catch (error) {
-          console.error("Auth error:", error);
+          console.error("🔍 [authorize] ERROR:", error);
           return null;
         }
       },
@@ -97,6 +103,7 @@ const authConfig = {
       return token;
     },
     async session({ session, token }: { session: any; token: any }) {
+      console.log("🔍 [session] token received:", JSON.stringify(token));
       if (token) {
         session.user = {
           id: token.id,
@@ -107,6 +114,7 @@ const authConfig = {
           trialEndsAt: token.trialEndsAt,
         };
       }
+      console.log("🔍 [session] session.user:", JSON.stringify(session.user));
       return session;
     },
   },
@@ -120,7 +128,7 @@ const authConfig = {
 // Create the NextAuth instance
 const { handlers, auth, signIn, signOut } = NextAuth({
   ...authConfig,
-  trustHost: true,
+  trustHost: true, // Always trust host — required for Vercel/custom domains
 });
 
 export { handlers, auth, signIn, signOut };
