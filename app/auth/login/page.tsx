@@ -6,7 +6,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
-import { loginWithCredentials } from "@/lib/actions/auth";
+import { signIn } from "next-auth/react";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -38,13 +38,14 @@ export default function LoginPage() {
     setError(null);
 
     try {
-      const result = await loginWithCredentials({
+      const result = await signIn("credentials", {
         email: data.email,
         password: data.password,
+        redirect: false,
       });
 
-      if (!result.success) {
-        throw new Error(result.error || "Invalid email or password");
+      if (result?.error) {
+        throw new Error("Invalid email or password");
       }
 
       // Redirect to dashboard on success

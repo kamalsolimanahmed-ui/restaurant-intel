@@ -3,8 +3,7 @@ import CredentialsProvider from "next-auth/providers/credentials";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 
-// Flag to track if database is available
-let dbAvailable = true;
+
 
 const authConfig = {
   secret: process.env.NEXTAUTH_SECRET || "fallback-secret-key-for-development-only",
@@ -24,23 +23,12 @@ const authConfig = {
           return null;
         }
 
-        // If database is known to be unavailable, return null quickly
-        if (!dbAvailable) {
-          console.error("Database is unavailable");
-          return null;
-        }
 
         try {
-          // Add timeout to prevent hanging
-          const user = await Promise.race([
-            prisma.user.findUnique({
-              where: { email },
-              include: { restaurant: true },
-            }),
-            new Promise<null>((_, reject) =>
-              setTimeout(() => reject(new Error("DB timeout")), 3000)
-            ),
-          ]);
+          const user = await prisma.user.findUnique({
+            where: { email },
+            include: { restaurant: true },
+          });
 
           if (!user) {
             return null;
@@ -61,8 +49,7 @@ const authConfig = {
             trialEndsAt: user.trialEndsAt?.toISOString() || null,
           };
         } catch (error) {
-          console.error("Auth error (DB may be unavailable):", error);
-          dbAvailable = false;
+          console.error("Auth error:", error);
           return null;
         }
       },
@@ -131,6 +118,9 @@ const authConfig = {
 };
 
 // Create the NextAuth instance
-const { handlers, auth, signIn, signOut } = NextAuth(authConfig);
+const { handlers, auth, signIn, signOut } = NextAuth({
+  ...authConfig,
+  trustHost: true,
+});
 
 export { handlers, auth, signIn, signOut };
