@@ -6,7 +6,7 @@ import { useForm, Controller } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { Eye, EyeOff } from "lucide-react";
-import { loginWithCredentials } from "@/lib/actions/auth";
+import { signIn } from "@/lib/auth";
 
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -102,13 +102,10 @@ export default function SignupPage() {
       }
 
       // Auto-login after signup
-      const loginResult = await loginWithCredentials({
-        email: data.email,
-        password: data.password,
-      });
-
-      if (!loginResult.success) {
-        throw new Error("Account created but login failed. Please log in manually.");
+      try {
+        await signIn(data.email, data.password);
+      } catch (e) {
+        throw new Error("Account created but auto-login failed. Please log in manually.");
       }
 
       // Redirect to dashboard on success
