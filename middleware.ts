@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import type { NextRequest } from 'next/server';
-import { getToken } from 'next-auth/jwt';
+import { jwtVerify } from 'jose';
 
 // Paths that are always allowed (even for expired trials)
 const publicPaths = ['/', '/auth/login', '/auth/signup', '/pricing', '/privacy', '/terms', '/contact', '/upgrade', '/checkout', '/api/auth', '/api/email/test', '/api/paddle', '/api/cron'];
@@ -17,15 +17,21 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // If path is not public, it is protected by default.
-  // We no longer rely on a hardcoded list of protected paths.
+  // Get the session token
+  const sessionToken = request.cookies.get("session")?.value;
+  let token: any = null;
 
-  // Get the session token with fallback secret
-  const secret = process.env.NEXTAUTH_SECRET || "fallback-secret-key-for-development-only";
-  const token = await getToken({
-    req: request,
-    secret: secret,
-  });
+  if (sessionToken) {
+    try {
+      const secret = new TextEncoder().encode(
+        process.env.AUTH_SECRET || "fallback-secret-for-development"
+      );
+      const { payload } = await jwtVerify(sessionToken, secret);
+      token = payload;
+    } catch (err) {
+      // Invalid token
+    }
+  }
 
   // If no token, redirect to login
   if (!token) {
@@ -35,13 +41,11 @@ export async function middleware(request: NextRequest) {
   }
 
   // Check trial status
-  // If trialEndsAt is null or invalid, we treat it as expired to strictly enforce the paywall
   const trialEndsAt = token.trialEndsAt ? new Date(token.trialEndsAt as string) : null;
   const isSubscribed = token.subscribed === true;
   const now = new Date();
 
   // Determine if trial is expired
-  // Fallback to true (expired) if trialEndsAt is falsy or invalid
   const isTrialExpired = trialEndsAt ? (trialEndsAt < now || isNaN(trialEndsAt.getTime())) : true;
 
   // Trial expired and not subscribed → enforce paywall
@@ -72,12 +76,6 @@ export async function middleware(request: NextRequest) {
 // Configure which paths to run middleware on
 export const config = {
   matcher: [
-    /*
-     * Match all request paths except for the ones starting with:
-     * - _next/static (static files)
-     * - _next/image (image optimization files)
-     * - favicon.ico (favicon file)
-     */
     '/((?!_next/static|_next/image|favicon.ico).*)',
   ],
 };

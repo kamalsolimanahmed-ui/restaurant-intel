@@ -1,118 +1,111 @@
-import NextAuth from "next-auth";
-import CredentialsProvider from "next-auth/providers/credentials";
+"use server";
+
+import { supabase } from "./supabase";
 import bcrypt from "bcryptjs";
-import { prisma } from "@/lib/prisma";
+import { cookies } from "next/headers";
+import { SignJWT, jwtVerify } from "jose";
 
-// NextAuth v5: AUTH_SECRET is read automatically from the environment.
-// Do NOT pass `secret` in the config — v5 will throw a Configuration error
-// if AUTH_SECRET is missing from env, and passing it manually causes conflicts.
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.AUTH_SECRET || "fallback-secret-for-development"
+);
 
-export const { handlers, auth, signIn, signOut } = NextAuth({
-  trustHost: true, // Required for Vercel and custom domains
-  providers: [
-    CredentialsProvider({
-      name: "credentials",
-      credentials: {
-        email: { label: "Email", type: "email" },
-        password: { label: "Password", type: "password" },
+export async function signUp(
+  email: string,
+  password: string,
+  restaurantName: string,
+  country: string
+) {
+  const hashed = await bcrypt.hash(password, 10);
+
+  // 1. Create Restaurant first (required strictly by Prisma schema)
+  const { data: restaurant, error: restError } = await supabase
+    .from("Restaurant")
+    .insert({ name: restaurantName, country, currency: "USD" })
+    .select()
+    .single();
+
+  if (restError) throw restError;
+
+  // 2. Create User linked to Restaurant
+  const { data: user, error: userError } = await supabase
+    .from("User")
+    .insert({
+      email,
+      password: hashed,
+      restaurantId: restaurant.id,
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
+    })
+    .select()
+    .single();
+
+  if (userError) {
+    // Cleanup if user creation fails
+    await supabase.from("Restaurant").delete().eq("id", restaurant.id);
+    throw userError;
+  }
+
+  return user;
+}
+
+export async function signIn(email: string, password: string) {
+  const { data: user, error } = await supabase
+    .from("User")
+    .select("*, Restaurant(*)")
+    .eq("email", email)
+    .single();
+
+  if (error || !user) throw new Error("Invalid email or password");
+
+  const match = await bcrypt.compare(password, user.password);
+  if (!match) throw new Error("Invalid password");
+
+  // Create JWT session token
+  const token = await new SignJWT({
+    id: user.id,
+    email: user.email,
+    restaurantId: user.restaurantId,
+    restaurantName: user.Restaurant?.name || "",
+    subscribed: user.subscribed,
+    trialEndsAt: user.trialEndsAt,
+  })
+    .setProtectedHeader({ alg: "HS256" })
+    .setExpirationTime("30d")
+    .sign(JWT_SECRET);
+
+  (await cookies()).set("session", token, {
+    httpOnly: true,
+    secure: process.env.NODE_ENV === "production",
+    maxAge: 30 * 24 * 60 * 60, // 30 days
+    path: "/",
+  });
+
+  return user;
+}
+
+export async function signOut() {
+  (await cookies()).delete("session");
+}
+
+// Replacement for auth() that reads our custom JWT cookie
+// The rest of your app expects auth() to return { user: { ... } }
+export async function auth() {
+  const cookieStore = await cookies();
+  const sessionToken = cookieStore.get("session")?.value;
+  if (!sessionToken) return null;
+
+  try {
+    const { payload } = await jwtVerify(sessionToken, JWT_SECRET);
+    return {
+      user: {
+        id: payload.id as string,
+        email: payload.email as string,
+        restaurantId: payload.restaurantId as string,
+        restaurantName: payload.restaurantName as string,
+        subscribed: payload.subscribed as boolean,
+        trialEndsAt: payload.trialEndsAt as string | null,
       },
-      async authorize(credentials) {
-        const email = credentials?.email as string | undefined;
-        const password = credentials?.password as string | undefined;
-
-        console.log("🔍 [authorize] called with email:", email);
-
-        if (!email || !password) {
-          console.log("🔍 [authorize] missing credentials");
-          return null;
-        }
-
-        try {
-          const user = await prisma.user.findUnique({
-            where: { email },
-            include: { restaurant: true },
-          });
-
-          console.log("🔍 [authorize] user found:", user ? `id=${user.id}` : "NOT FOUND");
-
-          if (!user) return null;
-
-          const isPasswordValid = await bcrypt.compare(password, user.password);
-          console.log("🔍 [authorize] password valid:", isPasswordValid);
-
-          if (!isPasswordValid) return null;
-
-          const result = {
-            id: user.id,
-            email: user.email,
-            restaurantId: user.restaurantId,
-            restaurantName: user.restaurant?.name ?? "",
-            subscribed: user.subscribed,
-            trialEndsAt: user.trialEndsAt?.toISOString() || null,
-          };
-          console.log("🔍 [authorize] returning:", JSON.stringify(result));
-          return result;
-        } catch (error) {
-          console.error("🔍 [authorize] DB ERROR:", error);
-          return null;
-        }
-      },
-    }),
-  ],
-  session: {
-    strategy: "jwt",
-    maxAge: 30 * 24 * 60 * 60,
-  },
-  callbacks: {
-    async jwt({ token, user }) {
-      if (user) {
-        // Fresh login — populate token from user object
-        token.id = user.id;
-        token.email = user.email;
-        token.restaurantId = (user as any).restaurantId;
-        token.restaurantName = (user as any).restaurantName;
-        token.subscribed = (user as any).subscribed;
-        token.trialEndsAt = (user as any).trialEndsAt;
-        token._lastRefreshed = Date.now();
-      } else {
-        // Token refresh — re-sync subscription status from DB every hour
-        const ONE_HOUR = 60 * 60 * 1000;
-        const lastRefreshed = (token._lastRefreshed as number) || 0;
-        if (token.id && Date.now() - lastRefreshed > ONE_HOUR) {
-          try {
-            const dbUser = await prisma.user.findUnique({
-              where: { id: token.id as string },
-              select: { subscribed: true, trialEndsAt: true },
-            });
-            if (dbUser) {
-              token.subscribed = dbUser.subscribed;
-              token.trialEndsAt = dbUser.trialEndsAt?.toISOString() ?? null;
-              token._lastRefreshed = Date.now();
-            }
-          } catch {
-            // Keep existing token on DB failure
-          }
-        }
-      }
-      return token;
-    },
-    async session({ session, token }) {
-      console.log("🔍 [session] token:", JSON.stringify(token));
-      session.user = {
-        ...session.user,
-        id: token.id as string,
-        email: token.email as string,
-        restaurantId: token.restaurantId as string,
-        restaurantName: token.restaurantName as string,
-        subscribed: token.subscribed as boolean,
-        trialEndsAt: token.trialEndsAt as string | null,
-      };
-      console.log("🔍 [session] session.user:", JSON.stringify(session.user));
-      return session;
-    },
-  },
-  pages: {
-    signIn: "/auth/login",
-    error: "/auth/login",
-  },
-});
+    };
+  } catch (err) {
+    return null; // invalid/expired token
+  }
+}
