@@ -1,9 +1,9 @@
 "use server";
 
-import { supabase } from "./supabase";
 import bcrypt from "bcryptjs";
 import { cookies } from "next/headers";
 import { SignJWT, jwtVerify } from "jose";
+import { prisma } from "./prisma";
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.AUTH_SECRET || "fallback-secret-for-development"
@@ -17,44 +17,35 @@ export async function signUp(
 ) {
   const hashed = await bcrypt.hash(password, 10);
 
-  // 1. Create Restaurant first (required strictly by Prisma schema)
-  const { data: restaurant, error: restError } = await supabase
-    .from("Restaurant")
-    .insert({ name: restaurantName, country, currency: "USD" })
-    .select()
-    .single();
-
-  if (restError) throw restError;
+  // 1. Create Restaurant first
+  const restaurant = await prisma.restaurant.create({
+    data: {
+      name: restaurantName,
+      country,
+      currency: "USD",
+    },
+  });
 
   // 2. Create User linked to Restaurant
-  const { data: user, error: userError } = await supabase
-    .from("User")
-    .insert({
+  const user = await prisma.user.create({
+    data: {
       email,
       password: hashed,
       restaurantId: restaurant.id,
-      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000).toISOString(),
-    })
-    .select()
-    .single();
-
-  if (userError) {
-    // Cleanup if user creation fails
-    await supabase.from("Restaurant").delete().eq("id", restaurant.id);
-    throw userError;
-  }
+      trialEndsAt: new Date(Date.now() + 14 * 24 * 60 * 60 * 1000),
+    },
+  });
 
   return user;
 }
 
 export async function signIn(email: string, password: string) {
-  const { data: user, error } = await supabase
-    .from("User")
-    .select("*, Restaurant(*)")
-    .eq("email", email)
-    .single();
+  const user = await prisma.user.findUnique({
+    where: { email },
+    include: { restaurant: true },
+  });
 
-  if (error || !user) throw new Error("Invalid email or password");
+  if (!user) throw new Error("Invalid email or password");
 
   const match = await bcrypt.compare(password, user.password);
   if (!match) throw new Error("Invalid password");
@@ -64,9 +55,9 @@ export async function signIn(email: string, password: string) {
     id: user.id,
     email: user.email,
     restaurantId: user.restaurantId,
-    restaurantName: user.Restaurant?.name || "",
+    restaurantName: user.restaurant?.name || "",
     subscribed: user.subscribed,
-    trialEndsAt: user.trialEndsAt,
+    trialEndsAt: user.trialEndsAt?.toISOString() || null,
   })
     .setProtectedHeader({ alg: "HS256" })
     .setExpirationTime("30d")

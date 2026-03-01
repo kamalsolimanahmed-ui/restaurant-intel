@@ -75,14 +75,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
 
     return NextResponse.json({
       success: true,
-      message: "Account created successfully",
-      data: {
-        userId: user.id,
-        email: user.email,
-        restaurantId: restaurant.id,
-        restaurantName: restaurant.name,
-        trialEndsAt: user.trialEndsAt?.toISOString(),
-      },
+      user: user
     });
   } catch (error) {
     console.error("Signup error:", error);
