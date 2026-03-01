@@ -104,7 +104,7 @@ function UpgradeContent() {
             Questions? <a href="mailto:support@restaurantintel.app" className="text-green-600 hover:text-green-700">Contact support</a>
           </p>
           <p className="text-xs text-gray-400 mt-2">
-            By upgrading, you agree to our <a href="/terms" className="underline">Terms</a> and <a href="/privacy" className="underline">Privacy Policy</a>
+            By upgrading, you agree to our <a href="/terms-and-conditions" className="underline">Terms</a> and <a href="/privacy-policy" className="underline">Privacy Policy</a>
           </p>
         </div>
       </div>

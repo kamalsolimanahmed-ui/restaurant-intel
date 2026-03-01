@@ -11,7 +11,21 @@ export function Footer() {
           </p>
 
           {/* Links */}
-          <div className="flex items-center gap-4">
+          <div className="flex flex-wrap items-center justify-center gap-4 md:justify-end">
+            <Link
+              href="/pricing"
+              className="text-sm text-gray-300 transition-colors hover:text-white"
+            >
+              Pricing
+            </Link>
+            <span className="text-gray-600">|</span>
+            <Link
+              href="/refund-policy"
+              className="text-sm text-gray-300 transition-colors hover:text-white"
+            >
+              Refund Policy
+            </Link>
+            <span className="text-gray-600">|</span>
             <Link
               href="/privacy-policy"
               className="text-sm text-gray-300 transition-colors hover:text-white"
