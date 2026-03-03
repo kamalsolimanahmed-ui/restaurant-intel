@@ -76,10 +76,11 @@ model Analysis {
   worstDayLoss    Decimal? @db.Decimal(10, 2)
 
   // Insights
-  insight  String? @db.Text
-  action   String? @db.Text
-  savings  String? @db.Text
-  severity String? @db.VarChar(20)
+  insight   String? @db.Text
+  action    String? @db.Text
+  savings   String? @db.Text
+  severity  String? @db.VarChar(20)
+  aiInsight String? @db.Text  // Cached DeepSeek AI action plan
 
   // Totals
   totalRevenue Decimal? @db.Decimal(12, 2)

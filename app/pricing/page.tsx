@@ -51,12 +51,7 @@ export default function PricingPage() {
                             </div>
                             Health score & insights
                         </li>
-                        <li className="flex gap-x-3">
-                            <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
-                                <Check className="h-4 w-4" />
-                            </div>
-                            PDF report download
-                        </li>
+
                         <li className="flex gap-x-3">
                             <div className="flex h-6 w-6 shrink-0 items-center justify-center rounded-full bg-green-100 text-green-600">
                                 <Check className="h-4 w-4" />
@@ -73,6 +68,9 @@ export default function PricingPage() {
 
                     <Button asChild className="mt-8 w-full bg-green-600 py-6 text-lg font-semibold hover:bg-green-700">
                         <Link href="/auth/signup">Start Free Trial</Link>
+                    </Button>
+                    <Button asChild variant="outline" className="mt-4 w-full py-6 text-lg font-semibold text-green-700 border-green-200 hover:bg-green-50">
+                        <Link href="/checkout">Upgrade to Pro</Link>
                     </Button>
                     <p className="mt-4 text-center text-xs text-gray-500">No credit card required for trial.</p>
                 </div>

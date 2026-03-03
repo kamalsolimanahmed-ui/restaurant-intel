@@ -1,11 +1,12 @@
 "use client";
 
-import { useState, useEffect, Suspense } from "react";
+import { useState, useEffect, useCallback, Suspense } from "react";
 import { useRouter, useSearchParams } from "next/navigation";
-import { LogOut, Upload, Share, Mail, Check, Loader2 } from "lucide-react";
+import { LogOut, Upload, Share, Mail, Check, Loader2, Sparkles, Bot } from "lucide-react";
 import { getSession, signOut } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
+// DeepSeek is called via API route to keep the key server-side
 
 const getHealthScoreConfig = (score: number) => {
   if (score < 0) return { emoji: "⏸", label: "Paused", color: "text-gray-400" };
@@ -80,8 +81,57 @@ function ResultsContent() {
   const [isLoading, setIsLoading] = useState(true);
   const [analysis, setAnalysis] = useState<AnalysisData | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [aiInsight, setAiInsight] = useState<string | null>(null);
+  const [isLoadingAI, setIsLoadingAI] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
 
   const analysisId = searchParams.get("analysisId");
+
+  const fetchAIInsight = useCallback(async () => {
+    if (!analysisId) return;
+    setIsLoadingAI(true);
+    setAiInsight(null);
+    setAiError(null);
+    try {
+      const response = await fetch(`/api/analyses/${analysisId}/ai-insight`);
+      if (!response.ok) {
+        throw new Error(`Request failed: ${response.status}`);
+      }
+      // Stream the response — update text as chunks arrive
+      const reader = response.body?.getReader();
+      const decoder = new TextDecoder();
+      if (!reader) throw new Error("No response body");
+      let accumulated = "";
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        accumulated += decoder.decode(value, { stream: true });
+        setAiInsight(accumulated);
+      }
+      // Flush any remaining bytes
+      accumulated += decoder.decode();
+      setAiInsight(accumulated || "No insights generated.");
+    } catch (err) {
+      console.error("AI insight stream error:", err);
+      setAiError("AI insights unavailable right now. Try regenerating.");
+    } finally {
+      setIsLoadingAI(false);
+    }
+  }, [analysisId]);
+
+  const fetchAnalysis = useCallback(async () => {
+    try {
+      const response = await fetch(`/api/analyses/${analysisId}`);
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error || "Failed to fetch analysis");
+      setAnalysis(data.analysis);
+    } catch (err) {
+      console.error("Fetch analysis error:", err);
+      setError(err instanceof Error ? err.message : "Failed to load analysis");
+    } finally {
+      setIsLoading(false);
+    }
+  }, [analysisId]);
 
   useEffect(() => {
     getSession().then((sess) => {
@@ -98,21 +148,15 @@ function ResultsContent() {
         router.push("/auth/login");
       }
     });
-  }, [analysisId]);
+  }, [analysisId, fetchAnalysis, router]);
 
-  const fetchAnalysis = async () => {
-    try {
-      const response = await fetch(`/api/analyses/${analysisId}`);
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error || "Failed to fetch analysis");
-      setAnalysis(data.analysis);
-    } catch (err) {
-      console.error("Fetch analysis error:", err);
-      setError(err instanceof Error ? err.message : "Failed to load analysis");
-    } finally {
-      setIsLoading(false);
+  // Once analysis loads and it's not paused, trigger the AI insight fetch
+  useEffect(() => {
+    if (analysis && analysis.healthScore >= 0) {
+      fetchAIInsight();
     }
-  };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [analysis?.id]);
 
   const showToastMessage = (message: string) => {
     setToastMessage(message);
@@ -363,6 +407,120 @@ function ResultsContent() {
             <section className="rounded-lg p-6 mb-6" style={{ backgroundColor: "#f9fafb", maxWidth: "600px" }}>
               <p className="text-sm font-bold uppercase text-gray-500 mb-3">INSIGHT</p>
               <p className="text-base text-black leading-relaxed">{analysis.insight}</p>
+            </section>
+          )}
+
+          {/* ── Deep Analysis section ──────────────────────────────────── */}
+          {!isPaused && (
+            <section className="mb-8">
+              <div
+                className="rounded-2xl overflow-hidden"
+                style={{
+                  background: "linear-gradient(135deg, #0f172a 0%, #1e293b 60%, #0f3460 100%)",
+                  boxShadow: "0 4px 24px rgba(15,23,42,0.18)",
+                }}
+              >
+                {/* Header */}
+                <div className="flex items-center gap-3 px-6 pt-6 pb-4 border-b border-white/10">
+                  <div
+                    className="w-9 h-9 rounded-xl flex items-center justify-center flex-shrink-0"
+                    style={{ background: "linear-gradient(135deg, #6366f1, #8b5cf6)" }}
+                  >
+                    <Bot className="w-5 h-5 text-white" />
+                  </div>
+                  <div>
+                    <p className="text-white font-bold text-base leading-tight">Deep Analysis</p>
+                    <p className="text-white/50 text-xs">Personalized recommendations for your restaurant</p>
+                  </div>
+                  {isLoadingAI && (
+                    <div className="ml-auto flex items-center gap-2">
+                      <Loader2 className="w-4 h-4 text-violet-400 animate-spin" />
+                      <span className="text-xs text-violet-400">Analyzing…</span>
+                    </div>
+                  )}
+                  {aiInsight && !isLoadingAI && (
+                    <div className="ml-auto flex items-center gap-1.5">
+                      <Sparkles className="w-4 h-4 text-violet-400" />
+                      <span className="text-xs text-violet-300 font-medium">Ready</span>
+                    </div>
+                  )}
+                </div>
+
+                {/* Body */}
+                <div className="px-6 py-5">
+                  {/* Skeleton — only before first chunk arrives */}
+                  {isLoadingAI && !aiInsight && (
+                    <div className="space-y-3 animate-pulse">
+                      {["w-full", "w-4/5", "w-3/5"].map((w, i) => (
+                        <div key={i} className="flex items-start gap-3">
+                          <div className="w-6 h-6 rounded-full bg-white/10 flex-shrink-0 mt-0.5" />
+                          <div className="flex-1 space-y-2">
+                            <div className={`h-3 bg-white/10 rounded ${w}`} />
+                            <div className="h-3 bg-white/10 rounded w-2/3" />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+
+                  {aiError && !aiInsight && (
+                    <p className="text-sm text-red-400">{aiError}</p>
+                  )}
+
+                  {aiInsight && (
+                    <div className="space-y-4">
+                      {aiInsight
+                        .split(/\n/)
+                        .filter((line) => line.trim())
+                        .map((line, i) => {
+                          const isNumbered = /^\d+[.)\s]/.test(line.trim());
+                          const text = line.replace(/^\d+[.)\s]+/, "").trim();
+                          if (!text) return null;
+
+                          if (isNumbered) {
+                            const num = (line.match(/^(\d+)/) || [])[1];
+                            return (
+                              <div key={i} className="flex items-start gap-3">
+                                <div
+                                  className="w-7 h-7 rounded-full flex items-center justify-center flex-shrink-0 mt-0.5 font-bold text-sm"
+                                  style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)", color: "#fff" }}
+                                >
+                                  {num}
+                                </div>
+                                <p className="text-white/90 text-sm leading-relaxed flex-1">
+                                  {text}
+                                </p>
+                              </div>
+                            );
+                          }
+
+                          if (line.trim().endsWith(":") || /^[A-Z\s]{5,}$/.test(line.trim())) {
+                            return (
+                              <p key={i} className="text-violet-300 font-bold text-xs uppercase tracking-wider mt-2">
+                                {line.trim().replace(/:$/, "")}
+                              </p>
+                            );
+                          }
+
+                          return (
+                            <p key={i} className="text-white/75 text-sm leading-relaxed">
+                              {line.trim()}
+                            </p>
+                          );
+                        })}
+                      {/* Blinking cursor while still streaming */}
+                      {isLoadingAI && (
+                        <span
+                          className="inline-block w-0.5 h-4 bg-violet-400 ml-1 align-middle"
+                          style={{ animation: "blink 1s step-end infinite" }}
+                        />
+                      )}
+                      <style>{`@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0} }`}</style>
+                    </div>
+                  )}
+                </div>
+
+              </div>
             </section>
           )}
 

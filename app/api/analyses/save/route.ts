@@ -55,6 +55,28 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       );
     }
 
+    const restaurantId = session.user.restaurantId;
+
+    // ── GATE: trial expired + not paying → max 1 analysis ───────────────────
+    const isPaying = session.user.subscribed === true;
+    const trialEndsAt = session.user.trialEndsAt
+      ? new Date(session.user.trialEndsAt)
+      : null;
+    const trialExpired = !trialEndsAt || new Date() > trialEndsAt;
+
+    if (trialExpired && !isPaying) {
+      const existingCount = await prisma.analysis.count({
+        where: { restaurantId },
+      });
+      if (existingCount >= 1) {
+        return NextResponse.json(
+          { success: false, error: "UPGRADE_REQUIRED", upgradeRequired: true },
+          { status: 403 }
+        );
+      }
+    }
+    // ─────────────────────────────────────────────────────────────────────────
+
     const body = await request.json();
     const validationResult = SaveAnalysisSchema.safeParse(body);
 
@@ -70,12 +92,11 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     }
 
     const data = validationResult.data;
-    const restaurantId = session.user.restaurantId;
 
     // Create the analysis
     const analysis = await prisma.analysis.create({
       data: {
-        restaurantId: restaurantId,
+        restaurantId,
         uploadId: data.uploadId,
         healthScore: data.healthScore,
         laborPct: data.laborPct,
@@ -107,7 +128,7 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
     if (data.financialData && data.financialData.length > 0) {
       await prisma.financialData.createMany({
         data: data.financialData.map((row) => ({
-          restaurantId: restaurantId,
+          restaurantId,
           uploadId: data.uploadId,
           date: new Date(row.date),
           revenue: row.revenue,
@@ -119,12 +140,8 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       });
     }
 
-    return NextResponse.json({
-      success: true,
-      analysis,
-    });
+    return NextResponse.json({ success: true, analysis });
   } catch (error) {
-    // Log full error details to server console for diagnosis
     console.error("Save analysis error:", error);
     if (error && typeof error === "object" && "code" in error) {
       console.error("Prisma error code:", (error as { code: string }).code);
@@ -135,13 +152,9 @@ export async function POST(request: NextRequest): Promise<NextResponse> {
       ? String((error as { code: string }).code)
       : undefined;
     return NextResponse.json(
-      {
-        success: false,
-        error: "Failed to save analysis",
-        details: message,
-        code,
-      },
+      { success: false, error: "Failed to save analysis", details: message, code },
       { status: 500 }
     );
   }
 }
+

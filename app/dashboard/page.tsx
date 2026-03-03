@@ -3,7 +3,7 @@
 import { useState, useCallback, useEffect, useRef } from "react";
 import { useRouter } from "next/navigation";
 import { format, differenceInDays, parseISO } from "date-fns";
-import { LogOut, Check, FileText, Download, Loader2, X, FileDown } from "lucide-react";
+import { LogOut, Check, FileText, Loader2, X, FileDown, Zap, Lock } from "lucide-react";
 import { getSession, signOut } from "@/lib/auth";
 
 import { Button } from "@/components/ui/button";
@@ -29,6 +29,69 @@ interface Analysis {
   createdAt: string;
   pdfUrl: string | null;
 }
+
+// ── Upgrade Modal ────────────────────────────────────────────────────────────
+function UpgradeModal({ onClose }: { onClose: () => void }) {
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ backgroundColor: "rgba(0,0,0,0.6)", backdropFilter: "blur(4px)" }}>
+      <div className="relative w-full max-w-md rounded-2xl overflow-hidden" style={{ background: "linear-gradient(135deg,#0f172a 0%,#1e293b 100%)", boxShadow: "0 24px 64px rgba(0,0,0,0.5)" }}>
+
+        {/* Close */}
+        <button onClick={onClose} className="absolute top-4 right-4 w-8 h-8 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center transition-colors">
+          <X className="w-4 h-4 text-white" />
+        </button>
+
+        {/* Icon */}
+        <div className="flex justify-center pt-10 pb-4">
+          <div className="w-16 h-16 rounded-2xl flex items-center justify-center" style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}>
+            <Lock className="w-8 h-8 text-white" />
+          </div>
+        </div>
+
+        {/* Text */}
+        <div className="px-8 pb-4 text-center">
+          <h2 className="text-2xl font-bold text-white mb-2">Trial Ended</h2>
+          <p className="text-white/60 text-sm leading-relaxed">
+            Your 14-day free trial is over. You&apos;ve already run your first analysis — upgrade to keep running monthly reports and tracking your restaurant&apos;s health.
+          </p>
+        </div>
+
+        {/* Benefits */}
+        <div className="mx-8 mb-6 rounded-xl p-4" style={{ backgroundColor: "rgba(99,102,241,0.12)", border: "1px solid rgba(99,102,241,0.25)" }}>
+          <p className="text-violet-300 text-xs font-bold uppercase tracking-wider mb-3">What you get with Pro</p>
+          {[
+            "Unlimited monthly analyses",
+            "Deep Analysis — specific dollar-saving actions",
+            "Track trends month over month",
+          ].map((item) => (
+            <div key={item} className="flex items-center gap-2 mb-2 last:mb-0">
+              <div className="w-4 h-4 rounded-full bg-violet-500 flex items-center justify-center flex-shrink-0">
+                <Check className="w-2.5 h-2.5 text-white" />
+              </div>
+              <p className="text-white/80 text-sm">{item}</p>
+            </div>
+          ))}
+        </div>
+
+        {/* CTA */}
+        <div className="px-8 pb-8 flex flex-col gap-3">
+          <a
+            href="/checkout"
+            className="flex items-center justify-center gap-2 w-full py-3.5 rounded-xl font-bold text-white text-base transition-all hover:opacity-90"
+            style={{ background: "linear-gradient(135deg,#6366f1,#8b5cf6)" }}
+          >
+            <Zap className="w-4 h-4" />
+            Upgrade to Pro — $15/month
+          </a>
+          <button onClick={onClose} className="text-sm text-white/40 hover:text-white/60 transition-colors text-center">
+            Maybe later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+// ─────────────────────────────────────────────────────────────────────────────
 
 // Health score configuration
 const getHealthScoreConfig = (score: number | null) => {
@@ -290,6 +353,7 @@ export default function DashboardPage() {
   const [isAnalyzing, setIsAnalyzing] = useState(false);
   const [analyzeStep, setAnalyzeStep] = useState(0);
   const [analyzeError, setAnalyzeError] = useState<string | null>(null);
+  const [showUpgradeModal, setShowUpgradeModal] = useState(false);
   const [analyses, setAnalyses] = useState<Analysis[]>([]);
   const [isLoadingAnalyses, setIsLoadingAnalyses] = useState(true);
   const [latestHealthScore, setLatestHealthScore] = useState<number | null>(null);
@@ -352,6 +416,16 @@ export default function DashboardPage() {
 
   const handleAnalyze = async () => {
     if (!allFilesUploaded) return;
+
+    // ── CLIENT-SIDE GATE: show modal before wasting any processing ────────────
+    const isPaying = session?.user?.subscribed === true;
+    const trialEndsAt = session?.user?.trialEndsAt ? new Date(session.user.trialEndsAt) : null;
+    const trialExpired = !trialEndsAt || new Date() > trialEndsAt;
+    if (trialExpired && !isPaying && analyses.length >= 1) {
+      setShowUpgradeModal(true);
+      return;
+    }
+    // ─────────────────────────────────────────────────────────────────────────
 
     setIsAnalyzing(true);
     setAnalyzeStep(1);
@@ -513,6 +587,11 @@ export default function DashboardPage() {
         }),
       });
       const saveData = await saveRes.json();
+      // Handle upgrade required (server-side gate)
+      if (saveData.upgradeRequired) {
+        setShowUpgradeModal(true);
+        return;
+      }
       if (!saveData.success) throw new Error(`Failed to save: ${saveData.error} — ${saveData.details}`);
 
       router.push(`/results?analysisId=${saveData.analysis.id}`);
@@ -555,6 +634,8 @@ export default function DashboardPage() {
 
   return (
     <div className="min-h-screen bg-gray-50">
+      {/* Upgrade modal — shown when trial expired and not subscribed */}
+      {showUpgradeModal && <UpgradeModal onClose={() => setShowUpgradeModal(false)} />}
       {/* Header */}
       <header className="bg-white border-b border-gray-200 sticky top-0 z-10">
         <div className="max-w-[1400px] mx-auto px-4 py-4 flex items-center justify-between">

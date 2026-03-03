@@ -9,6 +9,7 @@ const nextConfig: NextConfig = {
   },
   // Silence Turbopack warning - using Turbopack (default in Next.js 16)
   turbopack: {},
+  outputFileTracingRoot: process.cwd(),
 };
 
 export default nextConfig;
