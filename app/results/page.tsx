@@ -582,9 +582,9 @@ function ResultsContent() {
                     target: {analysis.primeCostTarget ?? "under 60%"}
                   </p>
                   {analysis.foodCostEstimated && (
-                    <p className="text-xs text-amber-600 mt-1">
-                      ⚠ Food cost estimated at 30% — add expense categories to get real number
-                    </p>
+                    <span className="inline-flex items-center gap-1 mt-2 text-xs font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-700 border border-amber-300">
+                      ⚠ ESTIMATED — upload Expenses for real data
+                    </span>
                   )}
                 </div>
 

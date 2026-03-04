@@ -1,39 +1,34 @@
 'use client'
 
-import { useEffect } from 'react'
-
-// Add Paddle to the Window interface to prevent TypeScript errors
-declare global {
-    interface Window {
-        Paddle?: any;
-    }
-}
+import { useState } from 'react'
 
 export default function CheckoutPage() {
-    useEffect(() => {
-        const script = document.createElement('script')
-        script.src = 'https://cdn.paddle.com/paddle/v2/paddle.js'
-        script.async = true
-        script.onload = () => {
-            if (window.Paddle) {
-                window.Paddle.Initialize({
-                    token: process.env.NEXT_PUBLIC_PADDLE_CLIENT_TOKEN || 'live_93cb45b182c9fd6883547a652dc'
-                })
-            }
-        }
-        document.body.appendChild(script)
-    }, [])
+    const [loading, setLoading] = useState(false)
+    const [error, setError] = useState<string | null>(null)
 
-    const handleCheckout = () => {
-        if (window.Paddle) {
-            window.Paddle.Checkout.open({
-                items: [
-                    {
-                        priceId: 'pri_01kjsq8qh97741bxa8t7jrfpa',
-                        quantity: 1
-                    }
-                ]
+    const handleCheckout = async () => {
+        setLoading(true)
+        setError(null)
+        try {
+            const res = await fetch('/api/checkout', {
+                method: 'POST',
             })
+            const data = await res.json()
+
+            if (!res.ok) {
+                if (res.status === 401) {
+                    window.location.href = '/auth/login?callbackUrl=/checkout'
+                    return
+                }
+                throw new Error(data.error || 'Failed to initialize checkout')
+            }
+
+            // Redirect to Stripe checkout
+            window.location.href = data.url
+        } catch (err: any) {
+            console.error('Checkout error:', err)
+            setError(err.message)
+            setLoading(false)
         }
     }
 
@@ -41,20 +36,27 @@ export default function CheckoutPage() {
         <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', textAlign: 'center' }}>
             <h1>Restaurant Intel Pro</h1>
             <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>$15/month</p>
+            {error && (
+                <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '6px', marginTop: '15px', marginBottom: '15px', border: '1px solid #f87171', fontWeight: '500' }}>
+                    {error}
+                </div>
+            )}
             <button
                 onClick={handleCheckout}
+                disabled={loading}
                 style={{
                     width: '100%',
                     padding: '12px',
-                    backgroundColor: '#28a745',
+                    backgroundColor: loading ? '#ccc' : '#28a745',
                     color: 'white',
                     border: 'none',
                     borderRadius: '4px',
-                    cursor: 'pointer',
-                    fontSize: '16px'
+                    cursor: loading ? 'not-allowed' : 'pointer',
+                    fontSize: '16px',
+                    marginTop: '20px'
                 }}
             >
-                Start Free Trial
+                {loading ? 'Loading...' : 'Upgrade to Pro'}
             </button>
         </div>
     )

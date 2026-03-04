@@ -131,7 +131,7 @@ function DropZone({ type, icon, label, file, onDrop, onClear, isDragging, setIsD
     e.preventDefault();
     setIsDragging(false);
     const droppedFile = e.dataTransfer.files[0];
-    if (droppedFile && (droppedFile.name.endsWith(".csv") || droppedFile.name.endsWith(".xlsx"))) {
+    if (droppedFile && (droppedFile.name.endsWith(".csv") || droppedFile.name.endsWith(".xlsx") || droppedFile.name.endsWith(".xls"))) {
       onDrop(type, droppedFile);
     }
   }, [type, onDrop, setIsDragging]);
@@ -161,7 +161,7 @@ function DropZone({ type, icon, label, file, onDrop, onClear, isDragging, setIsD
         <input
           ref={inputRef}
           type="file"
-          accept=".csv,.xlsx"
+          accept=".csv,.xlsx,.xls"
           className="hidden"
           onChange={handleFileInput}
         />
@@ -412,10 +412,11 @@ export default function DashboardPage() {
     setFiles((prev) => ({ ...prev, [type]: null }));
   }, []);
 
-  const allFilesUploaded = files.sales && files.labor && files.expenses;
+  // Expenses is OPTIONAL — analysis runs with just Sales + Labor
+  const canAnalyze = files.sales && files.labor;
 
   const handleAnalyze = async () => {
-    if (!allFilesUploaded) return;
+    if (!canAnalyze) return;
 
     // ── CLIENT-SIDE GATE: show modal before wasting any processing ────────────
     const isPaying = session?.user?.subscribed === true;
@@ -467,14 +468,18 @@ export default function DashboardPage() {
       const laborParsed = await laborParseRes.json();
       if (!laborParsed.success) throw new Error(`Labor file error: ${laborParsed.error}. Detected columns: ${laborParsed.detectedHeaders?.join(", ") ?? "none"}`);
 
-      // Parse expenses file — requires: date, expense_amount (soft — won't block analysis)
-      const expForm = new FormData();
-      expForm.append("file", files.expenses!.file);
-      expForm.append("fileType", "expenses");
-      const expParseRes = await fetch("/api/parse", { method: "POST", body: expForm });
-      const expParsed = await expParseRes.json();
-      if (!expParsed.success) {
-        console.warn("Expenses parse warning (non-blocking):", expParsed.error);
+      // Parse expenses file — OPTIONAL: if not provided, food cost will be estimated at 30%
+      let expParsed: { success: boolean; data?: unknown[] } = { success: true, data: [] };
+      if (files.expenses) {
+        const expForm = new FormData();
+        expForm.append("file", files.expenses.file);
+        expForm.append("fileType", "expenses");
+        const expParseRes = await fetch("/api/parse", { method: "POST", body: expForm });
+        expParsed = await expParseRes.json();
+        if (!expParsed.success) {
+          console.warn("Expenses parse warning (non-blocking):", (expParsed as { error?: string }).error);
+          expParsed = { success: true, data: [] }; // treat as no expenses
+        }
       }
 
       // ── Merge all 3 by date ───────────────────────────────────────────────
@@ -484,8 +489,9 @@ export default function DashboardPage() {
         if (row.date) laborByDate.set(row.date, { laborCost: row.laborCost, laborHours: row.laborHours });
       }
 
+      type ExpRow = { date?: string; expenseAmount?: number; expenseCategory?: string };
       const expensesByDate = new Map<string, Array<{ expenseAmount?: number; expenseCategory?: string }>>();
-      for (const row of (expParsed.data ?? [])) {
+      for (const row of (expParsed.data ?? []) as ExpRow[]) {
         if (row.date) {
           if (!expensesByDate.has(row.date)) expensesByDate.set(row.date, []);
           expensesByDate.get(row.date)!.push({ expenseAmount: row.expenseAmount, expenseCategory: row.expenseCategory });
@@ -583,6 +589,7 @@ export default function DashboardPage() {
           laborDays: rulesData.laborDays,
           salesDateRange: rulesData.salesDateRange,
           laborDateRange: rulesData.laborDateRange,
+          foodCostEstimated: rulesData.foodCostEstimated,
           financialData: parsedData.slice(0, 500),
         }),
       });
@@ -646,10 +653,18 @@ export default function DashboardPage() {
             <span className="text-sm text-gray-600 hidden sm:inline">
               {session?.user?.email}
             </span>
+            {session?.user?.subscribed !== true && (
+              <a href="/checkout">
+                <Button className="bg-green-600 hover:bg-green-700 text-white font-semibold flex items-center gap-2">
+                  <Zap className="w-4 h-4 hidden sm:inline" />
+                  Upgrade to Pro
+                </Button>
+              </a>
+            )}
             <Button
               variant="outline"
               onClick={handleLogout}
-              className="flex items-center gap-2"
+              className="flex items-center gap-2 border-gray-200"
             >
               <LogOut className="w-4 h-4" />
               <span className="hidden sm:inline">Logout</span>
@@ -682,12 +697,25 @@ export default function DashboardPage() {
                 <DropZone type="labor" icon="👥" label="LABOR" file={files.labor}
                   onDrop={handleFileDrop} onClear={handleFileClear}
                   isDragging={isDragging} setIsDragging={setIsDragging} />
-                <DropZone type="expenses" icon="💸" label="EXPENSES" file={files.expenses}
-                  onDrop={handleFileDrop} onClear={handleFileClear}
-                  isDragging={isDragging} setIsDragging={setIsDragging} />
+                <div className="relative">
+                  <DropZone type="expenses" icon="💸" label="EXPENSES" file={files.expenses}
+                    onDrop={handleFileDrop} onClear={handleFileClear}
+                    isDragging={isDragging} setIsDragging={setIsDragging} />
+                  {!files.expenses && (
+                    <span className="absolute -top-2 left-1/2 -translate-x-1/2 bg-amber-100 text-amber-700 text-[10px] font-bold px-2 py-0.5 rounded-full border border-amber-300 whitespace-nowrap">
+                      Optional
+                    </span>
+                  )}
+                </div>
               </div>
 
-              {/* CSV Template Downloads */}
+              {/* Expenses optional hint */}
+              {!files.expenses && (
+                <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3 text-center">
+                  💡 <strong>No Expenses file?</strong> No problem — we&apos;ll estimate food cost at 30% of sales and show it as <em>Estimated</em>. Upload expenses anytime for the real number.
+                </p>
+              )}
+
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
                 {([
                   { label: "Sales Template", href: "/api/templates/sales" },
@@ -745,10 +773,10 @@ export default function DashboardPage() {
               {/* Analyze Button */}
               <Button
                 onClick={handleAnalyze}
-                disabled={!allFilesUploaded || isAnalyzing}
+                disabled={!canAnalyze || isAnalyzing}
                 className={cn(
                   "w-full py-6 text-lg font-semibold transition-all",
-                  allFilesUploaded && !isAnalyzing
+                  canAnalyze && !isAnalyzing
                     ? "bg-green-600 hover:bg-green-700 text-white"
                     : "bg-gray-200 text-gray-400 cursor-not-allowed"
                 )}

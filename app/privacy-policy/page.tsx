@@ -79,8 +79,8 @@ export default function PrivacyPolicy() {
                                     key={section.id}
                                     onClick={() => scrollTo(section.id)}
                                     className={`flex items-center gap-3 rounded-lg px-3 py-2 text-sm font-medium transition-all duration-200 ${activeSection === section.id
-                                            ? "bg-blue-50 text-blue-700"
-                                            : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
+                                        ? "bg-blue-50 text-blue-700"
+                                        : "text-gray-500 hover:bg-gray-50 hover:text-gray-900"
                                         }`}
                                 >
                                     <section.icon className={`h-4 w-4 ${activeSection === section.id ? "text-blue-600" : "text-gray-400"}`} />
@@ -179,7 +179,7 @@ export default function PrivacyPolicy() {
                                 </div>
                                 <div className="rounded-xl border border-gray-200 p-4">
                                     <h4 className="font-semibold text-gray-900">Payment Processors</h4>
-                                    <p className="text-sm text-gray-500 mt-1">We utilize secure third-party payment gateways (like Paddle/Stripe) to process subscription billing.</p>
+                                    <p className="text-sm text-gray-500 mt-1">We utilize secure third-party payment gateways (like Stripe) to process subscription billing.</p>
                                 </div>
                             </div>
                         </div>

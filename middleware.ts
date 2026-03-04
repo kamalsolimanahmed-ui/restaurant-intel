@@ -3,7 +3,7 @@ import type { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
 
 // Paths that are always allowed (even for expired trials)
-const publicPaths = ['/', '/auth/login', '/auth/signup', '/pricing', '/privacy', '/terms', '/contact', '/upgrade', '/checkout', '/api/auth', '/api/email/test', '/api/paddle', '/api/cron'];
+const publicPaths = ['/', '/auth/login', '/auth/signup', '/pricing', '/privacy', '/terms', '/contact', '/upgrade', '/checkout', '/api/auth', '/api/email/test', '/api/checkout', '/api/cron'];
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
