@@ -33,31 +33,37 @@ export default function CheckoutPage() {
     }
 
     return (
-        <div style={{ maxWidth: '400px', margin: '50px auto', padding: '20px', textAlign: 'center' }}>
-            <h1>Restaurant Intel Pro</h1>
-            <p style={{ fontSize: '32px', fontWeight: 'bold', color: '#28a745' }}>$15/month</p>
-            {error && (
-                <div style={{ backgroundColor: '#fee2e2', color: '#dc2626', padding: '12px', borderRadius: '6px', marginTop: '15px', marginBottom: '15px', border: '1px solid #f87171', fontWeight: '500' }}>
-                    {error}
-                </div>
-            )}
-            <button
-                onClick={handleCheckout}
-                disabled={loading}
-                style={{
-                    width: '100%',
-                    padding: '12px',
-                    backgroundColor: loading ? '#ccc' : '#28a745',
-                    color: 'white',
-                    border: 'none',
-                    borderRadius: '4px',
-                    cursor: loading ? 'not-allowed' : 'pointer',
-                    fontSize: '16px',
-                    marginTop: '20px'
-                }}
-            >
-                {loading ? 'Loading...' : 'Upgrade to Pro'}
-            </button>
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="max-w-md w-full bg-white rounded-2xl shadow-sm border border-gray-100 p-8 text-center">
+                <h1 className="text-2xl font-bold text-gray-900 mb-2">Restaurant Intel Pro</h1>
+                <p className="text-4xl font-extrabold text-green-600 mb-6">$15<span className="text-lg text-gray-400 font-medium">/month</span></p>
+
+                {error && (
+                    <div className="bg-red-50 text-red-600 p-3 rounded-lg border border-red-200 mb-6 font-medium text-sm">
+                        {error}
+                    </div>
+                )}
+
+                <button
+                    onClick={handleCheckout}
+                    disabled={loading}
+                    className={`w-full py-4 px-6 rounded-xl text-white font-bold text-lg transition-all 
+                        ${loading
+                            ? 'bg-gray-300 cursor-not-allowed'
+                            : 'bg-green-600 hover:bg-green-700 hover:shadow-md active:bg-green-800'
+                        }`}
+                >
+                    {loading ? (
+                        <span className="flex items-center justify-center gap-2">
+                            <svg className="animate-spin h-5 w-5 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                                <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8v8H4z"></path>
+                            </svg>
+                            Processing...
+                        </span>
+                    ) : 'Upgrade to Pro'}
+                </button>
+            </div>
         </div>
     )
 }
